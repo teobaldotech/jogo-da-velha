@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jogo da Velha</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#0f1720; --muted:#8aa0b4; --text:#e6edf3; --accent:#4f9cff; --win:#22c55e; --lose:#ef4444; --draw:#f59e0b;
+      --cell:#111826; --cell-hover:#162233; --grid:#1e293b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #122032 0%, #0b0f14 60%) no-repeat fixed;
+      color:var(--text); display:flex; min-height:100svh; align-items:center; justify-content:center; padding:24px;
+    }
+    .app{ width: min(980px, 100%); }
+    header{ display:flex; gap:16px; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    h1{ font-size:clamp(20px, 3vw, 28px); margin:0; letter-spacing:0.3px; }
+    .modes{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .btn, select{
+      appearance:none; border:1px solid #2b3a4f; background:linear-gradient(180deg,#122033,#0f1720);
+      color:var(--text); padding:10px 14px; border-radius:14px; font-weight:600; cursor:pointer; transition:transform .05s ease, border-color .2s;
+    }
+    .btn:hover, select:hover{ border-color:#39516f }
+    .btn:active{ transform:translateY(1px) }
+    .btn.secondary{ background:#0f1720; border-style:dashed }
+    .badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .badge{ padding:8px 10px; border-radius:999px; border:1px solid #203044; background:#0e1520; font-size:12px; color:var(--muted) }
+
+    .board-wrap{ display:grid; grid-template-columns: 1fr 320px; gap:20px; }
+    @media (max-width: 760px){
+      .board-wrap{ grid-template-columns: 1fr; }
+    }
+
+    .board{ aspect-ratio:1/1; background:linear-gradient(180deg,#0e1622,#0c121b); border-radius:24px; padding:14px; box-shadow:0 10px 40px rgba(0,0,0,.35); border:1px solid #1a2636; }
+    .grid{ display:grid; gap:10px; grid-template-columns:repeat(3,1fr); height:100%; }
+    .cell{
+      background:var(--cell); border:1px solid var(--grid); border-radius:16px; 
+      display:grid; place-items:center; font-size: clamp(40px, 10vw, 80px); font-weight:900; cursor:pointer; 
+      user-select:none; transition: background .18s ease, transform .05s ease, border-color .2s;
+    }
+    .cell:hover{ background:var(--cell-hover) }
+    .cell:active{ transform:scale(.995) }
+    .cell.disabled{ cursor:not-allowed; opacity:.6 }
+    .cell.win{ outline:2px solid var(--win); box-shadow:0 0 0 4px color-mix(in srgb, var(--win) 30%, transparent) inset; }
+
+    .side{ background:linear-gradient(180deg,#0e1622,#0c121b); border:1px solid #1a2636; border-radius:24px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.35); }
+    .row{ display:flex; gap:10px; align-items:center; justify-content:space-between; margin:10px 0 }
+    .score{
+      display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-top:12px;
+    }
+    .score .card{
+      background:#0f1720; border:1px solid #203044; padding:12px; border-radius:16px; text-align:center; 
+    }
+    .score .card h3{ margin:4px 0 6px 0; font-size:13px; color:var(--muted); font-weight:700; letter-spacing:.3px }
+    .score .num{ font-size:28px; font-weight:800 }
+    .card.x .num{ color:var(--accent) }
+    .card.o .num{ color:#7dd3fc }
+    .card.d .num{ color:var(--draw) }
+
+    .status{ margin:4px 0 2px 0; font-size:14px; color:var(--muted) }
+    .status .who{ font-weight:800; color:var(--text) }
+
+    footer{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; }
+    .hint{ font-size:12px; color:#7a8ca3 }
+    a.link{ color:var(--accent); text-decoration:none }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Jogo da Velha</h1>
+      <div class="modes">
+        <select id="mode">
+          <option value="pvp">👥 Jogador vs Jogador</option>
+          <option value="cpu">🤖 Jogador vs CPU</option>
+        </select>
+        <select id="difficulty">
+          <option value="easy">Fácil</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Difícil</option>
+        </select>
+        <button class="btn" id="new">Novo Jogo</button>
+        <button class="btn secondary" id="reset">Zerar Placar</button>
+      </div>
+    </header>
+
+    <div class="board-wrap">
+      <section class="board">
+        <div class="grid" id="grid" aria-label="Tabuleiro do jogo da velha"></div>
+      </section>
+
+      <aside class="side">
+        <div class="row">
+          <div>
+            <div class="status">Vez de: <span class="who" id="turnLabel">X</span></div>
+            <div class="hint" id="statusHint">Faça sua jogada.</div>
+          </div>
+          <div class="badge" id="modeBadge">Modo: PvP</div>
+        </div>
+        <div class="score">
+          <div class="card x"><h3>Vitórias X</h3><div class="num" id="scoreX">0</div></div>
+          <div class="card d"><h3>Empates</h3><div class="num" id="scoreD">0</div></div>
+          <div class="card o"><h3>Vitórias O</h3><div class="num" id="scoreO">0</div></div>
+        </div>
+        <footer>
+          <span class="hint">Dica: no modo "Difícil" a CPU usa o algoritmo Minimax (impossível de derrotar 👀).</span>
+        </footer>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const gridEl = document.getElementById('grid');
+    const modeSel = document.getElementById('mode');
+    const diffSel = document.getElementById('difficulty');
+    const newBtn = document.getElementById('new');
+    const resetBtn = document.getElementById('reset');
+    const turnLabel = document.getElementById('turnLabel');
+    const statusHint = document.getElementById('statusHint');
+    const modeBadge = document.getElementById('modeBadge');
+    const scoreXEl = document.getElementById('scoreX');
+    const scoreOEl = document.getElementById('scoreO');
+    const scoreDEl = document.getElementById('scoreD');
+
+    const WIN_LINES = [
+      [0,1,2],[3,4,5],[6,7,8], // rows
+      [0,3,6],[1,4,7],[2,5,8], // cols
+      [0,4,8],[2,4,6]          // diagonals
+    ];
+
+    let board, turn, over, winner, scores;
+
+    function init(matchReset=false){
+      board = Array(9).fill('');
+      turn = 'X';
+      over = false;
+      winner = null;
+      renderBoard();
+      updateStatus();
+      if(!matchReset){
+        scores = JSON.parse(localStorage.getItem('ttt-scores')||'{"X":0,"O":0,"D":0}');
+      }
+      updateScores();
+      modeBadge.textContent = 'Modo: ' + (modeSel.value === 'cpu' ? 'CPU' : 'PvP');
+      if(modeSel.value === 'cpu' && turn === 'O') cpuMove();
+    }
+
+    function updateScores(){
+      scoreXEl.textContent = scores.X;
+      scoreOEl.textContent = scores.O;
+      scoreDEl.textContent = scores.D;
+    }
+
+    function saveScores(){
+      localStorage.setItem('ttt-scores', JSON.stringify(scores));
+    }
+
+    function renderBoard(){
+      gridEl.innerHTML='';
+      board.forEach((val, i)=>{
+        const c = document.createElement('button');
+        c.className = 'cell';
+        c.setAttribute('data-idx', i);
+        c.setAttribute('aria-label', 'célula ' + (i+1));
+        c.textContent = val;
+        if(over || val) c.classList.add('disabled');
+        c.addEventListener('click', onCellClick, {once:true});
+        gridEl.appendChild(c);
+      });
+    }
+
+    function onCellClick(e){
+      const idx = +e.currentTarget.dataset.idx;
+      if(over || board[idx]) return;
+      playAt(idx, turn);
+      if(modeSel.value === 'cpu' && !over){
+        // Pequeno atraso para parecer mais natural
+        setTimeout(cpuMove, 180);
+      }
+    }
+
+    function playAt(idx, t){
+      if(board[idx] || over) return;
+      board[idx] = t;
+      gridEl.children[idx].textContent = t;
+      gridEl.children[idx].classList.add('disabled');
+      checkEnd();
+      if(!over){
+        turn = t === 'X' ? 'O' : 'X';
+        updateStatus();
+      }
+    }
+
+    function checkEnd(){
+      for(const [a,b,c] of WIN_LINES){
+        if(board[a] && board[a]===board[b] && board[a]===board[c]){
+          over = true; winner = board[a];
+          highlightWin([a,b,c]);
+          statusHint.textContent = `Fim de jogo! ${winner} venceu.`;
+          if(winner==='X') scores.X++; else scores.O++;
+          saveScores(); updateScores();
+          return;
+        }
+      }
+      if(board.every(Boolean)){
+        over = true; winner = 'D';
+        statusHint.textContent = 'Empate!';
+        scores.D++; saveScores(); updateScores();
+      }
+    }
+
+    function highlightWin(line){
+      for(const i of line){ gridEl.children[i].classList.add('win'); }
+    }
+
+    function updateStatus(){
+      turnLabel.textContent = turn;
+      if(over){
+        statusHint.textContent = 'Partida encerrada.';
+      }else{
+        statusHint.textContent = (modeSel.value==='cpu' && turn==='O') ? 'Aguarde a jogada da CPU…' : 'Faça sua jogada.';
+      }
+    }
+
+    // ===== CPU =====
+    function cpuMove(){
+      if(over) return;
+      const idx = chooseCpuIndex();
+      playAt(idx, 'O');
+    }
+
+    function chooseCpuIndex(){
+      const empty = board.map((v,i)=>v?null:i).filter(v=>v!==null);
+      const level = diffSel.value;
+
+      // 1) EASY: aleatório puro
+      if(level==='easy') return empty[Math.floor(Math.random()*empty.length)];
+
+      // 2) NORMAL: tenta ganhar, bloquear, centro, cantos, senão aleatório
+      if(level==='normal'){
+        // vencer
+        for(const i of empty){ if(wouldWin('O', i)) return i; }
+        // bloquear
+        for(const i of empty){ if(wouldWin('X', i)) return i; }
+        // centro
+        if(empty.includes(4)) return 4;
+        // cantos
+        const corners = empty.filter(i=>[0,2,6,8].includes(i));
+        if(corners.length) return corners[Math.floor(Math.random()*corners.length)];
+        // resto
+        return empty[Math.floor(Math.random()*empty.length)];
+      }
+
+      // 3) HARD: Minimax (ótimo)
+      let best = -Infinity, move = empty[0];
+      for(const i of empty){
+        board[i] = 'O';
+        const score = minimax(board, 0, false);
+        board[i] = '';
+        if(score > best){ best = score; move = i; }
+      }
+      return move;
+    }
+
+    function wouldWin(p, idx){
+      board[idx] = p;
+      const ok = WIN_LINES.some(([a,b,c])=> board[a]&&board[a]===board[b]&&board[a]===board[c]);
+      board[idx] = '';
+      return ok;
+    }
+
+    function minimax(state, depth, isMax){
+      const res = evaluate(state, depth);
+      if(res !== null) return res;
+
+      const empties = state.map((v,i)=>v?null:i).filter(v=>v!==null);
+      if(isMax){ // CPU 'O'
+        let best = -Infinity;
+        for(const i of empties){
+          state[i] = 'O';
+          best = Math.max(best, minimax(state, depth+1, false));
+          state[i] = '';
+        }
+        return best;
+      } else { // jogador 'X'
+        let best = Infinity;
+        for(const i of empties){
+          state[i] = 'X';
+          best = Math.min(best, minimax(state, depth+1, true));
+          state[i] = '';
+        }
+        return best;
+      }
+    }
+
+    function evaluate(s, depth){
+      for(const [a,b,c] of WIN_LINES){
+        if(s[a] && s[a]===s[b] && s[a]===s[c]){
+          if(s[a]==='O') return 10 - depth; // preferir vitórias rápidas
+          if(s[a]==='X') return depth - 10; // preferir adiar derrotas
+        }
+      }
+      if(s.every(Boolean)) return 0; // empate
+      return null; // não terminal
+    }
+
+    // ===== Controles =====
+    newBtn.addEventListener('click', ()=> init(true));
+    resetBtn.addEventListener('click', ()=>{
+      scores = {X:0,O:0,D:0}; saveScores(); updateScores(); init(true);
+    });
+    modeSel.addEventListener('change', ()=> init(true));
+    diffSel.addEventListener('change', ()=> init(true));
+
+    // Iniciar
+    init();
+  </script>
+</body>
+</html>
